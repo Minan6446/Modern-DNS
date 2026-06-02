@@ -1,0 +1,24 @@
+server:
+  port: "8080"
+  mode: "debug"
+
+mysql:
+  dsn: "dns:5dSkKxsbjMmbw5jx@tcp(10.0.11.24:3306)/dns?charset=utf8mb4&parseTime=True&loc=Local"
+
+redis:
+  addr: "10.0.11.24:6379"
+  password: ""
+  db: 0
+  cache_db: 0
+  session_db: 1
+  ratelimit_db: 2
+  auth_db: 3
+
+dns:
+  enabled: true
+  listen: ":53"
+
+jwt:
+  secret: "modern-dns-secret-change-in-production"
+  access_expire_min: 60
+  refresh_expire_h: 168
