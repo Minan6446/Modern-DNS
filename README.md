@@ -1,95 +1,130 @@
 # Modern DNS
 
-基于 Vue 3 + TypeScript + Vite 5 + Element Plus + Pinia + Vue Router + Vue I18n + Axios + ECharts + VueUse 的 DNS 管理系统前端演示项目。
+Modern DNS 是一个前后端一体化的 DNS 管理平台，提供域名解析管理、转发策略、缓存策略、安全防护、监控告警、工具诊断与系统配置等能力。
+
+## 项目状态
+
+- 后端：Go + Gin + GORM + Redis，提供完整 API 与 DNS 引擎能力
+- 前端：Vue 3 + TypeScript + Vite + Element Plus，提供完整管理控制台
+- 仓库类型：单仓（Monorepo），包含 backend 与 frontend 两个子项目
 
 ## 技术栈
 
-- Vue 3
-- TypeScript
+### 后端
+
+- Go 1.22
+- Gin
+- GORM + MySQL
+- Redis
+- JWT
+
+### 前端
+
+- Vue 3 + TypeScript
 - Vite 5
 - Element Plus
-- Vue I18n
-- Pinia
-- Vue Router
-- Axios
-- ECharts
-- VueUse
-- Vitest
-- ESLint
-- Prettier
-
-## 功能范围
-
-当前项目为纯前端实现，包含以下内容：
-
-- 左侧菜单、顶部导航、主内容区统一布局
-- 8 个一级菜单、完整二级路由
-- 仪表盘、域名管理、转发管理、缓存管理、安全中心、监控日志、工具箱、系统设置
-- 404 页面与无权限占位页
-- 基于模拟数据的表格、表单、弹窗、图表、筛选、分页、批量操作
-- 深浅色主题切换与响应式布局
-
-当前项目不包含以下内容：
-
-- 后端接口实现
-- 数据库与持久化服务
-- 登录鉴权后端逻辑
-- 真实部署配置
+- Pinia + Vue Router + Vue I18n
+- Axios + ECharts
+- Vitest + ESLint + Prettier
 
 ## 目录结构
 
-src 目录主要结构：
-
-- layout: 全局布局
-- router: 路由配置
-- stores: Pinia 全局状态
-- api: Axios 封装与模拟服务
-- components: 通用图表组件
-- constants: 菜单与常量
-- views: 各业务模块页面
-
-## 启动方式
-
-安装依赖：
-
-```bash
-npm install
+```text
+.
+├── backend/    # Go 后端服务与 DNS 引擎
+├── frontend/   # Vue 管理台
+├── scripts/    # 项目脚本
+└── README.md
 ```
 
-启动开发环境：
+更多子模块说明：
+
+- backend/README.md
+- docs/notification-template-examples.md
+
+## 快速开始
+
+### 1. 环境准备
+
+- Go >= 1.22
+- Node.js >= 20
+- npm >= 9
+- MySQL >= 8
+- Redis >= 7
+
+### 2. 初始化数据库
+
+在 MySQL 中执行：
 
 ```bash
+mysql -u <user> -p < backend/migrations/schema.sql
+```
+
+### 3. 启动后端
+
+```bash
+cd backend
+go mod tidy
+go run main.go
+```
+
+默认服务端口：8080。
+
+配置文件位于 backend/config/config.yaml，请根据实际环境修改 MySQL、Redis、JWT 等配置。
+
+### 4. 启动前端
+
+```bash
+cd frontend
+npm install
 npm run dev
 ```
 
-构建生产包：
+默认开发服务器由 Vite 提供。前端通过 /api 代理访问后端。
+
+如需覆盖后端地址，可设置环境变量 VITE_API_BASE_URL。
+
+## 常用命令
+
+### 后端
 
 ```bash
+cd backend
+go test ./...
+go run main.go
+```
+
+### 前端
+
+```bash
+cd frontend
+npm run dev
 npm run build
-```
-
-运行单元测试：
-
-```bash
+npm run preview
 npm run test:run
-```
-
-检查代码质量：
-
-```bash
 npm run lint
 npm run format:check
 ```
 
-预览构建结果：
+## 功能模块
 
-```bash
-npm run preview
-```
+- 仪表盘
+- 域名管理（Zone、记录、SOA、DNSSEC）
+- 转发管理（全局转发、条件转发）
+- 缓存管理
+- 安全中心（ACL、黑白名单、限流等）
+- 监控与告警
+- 工具箱（Dig、调试与测试能力）
+- 系统设置（用户、角色、备份、通知模板等）
 
-## 说明
+## 安全注意事项
 
-- 接口调用位置已保留在 src/api 中，当前默认走模拟数据。
-- 图表统一通过 BaseChart 组件封装。
-- 菜单结构与路由路径严格对应页面要求。
-- 国际化当前提供 zh-CN 与 en-US 两套基础语言包，默认使用 zh-CN。
+- 请勿在生产环境使用默认 JWT Secret。
+- 请及时修改默认管理员账号密码。
+- 建议通过环境变量或外部密钥管理系统注入敏感配置。
+
+## 开发建议
+
+- 提交前建议运行前端 lint 与 test。
+- 后端新增模型后，优先补充迁移脚本与接口测试。
+- API 变更时请同步更新前端调用与文档。
