@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
+import { CircleCheckFilled, CircleCloseFilled, WarningFilled, InfoFilled } from '@element-plus/icons-vue'
 
 export type DnsStatus = '正常' | '异常' | '同步中' | '禁用'
 
@@ -15,11 +16,11 @@ const props = withDefaults(
   },
 )
 
-const toneMap: Record<DnsStatus, { tone: TagTone; icon: string }> = {
-  正常: { tone: 'normal', icon: 'CircleCheckFilled' },
-  异常: { tone: 'danger', icon: 'CircleCloseFilled' },
-  同步中: { tone: 'warning', icon: 'WarningFilled' },
-  禁用: { tone: 'disabled', icon: 'InfoFilled' },
+const toneMap: Record<DnsStatus, { tone: TagTone; icon: Component }> = {
+  正常: { tone: 'normal', icon: CircleCheckFilled },
+  异常: { tone: 'danger', icon: CircleCloseFilled },
+  同步中: { tone: 'warning', icon: WarningFilled },
+  禁用: { tone: 'disabled', icon: InfoFilled },
 }
 
 const current = computed(() => toneMap[props.status])

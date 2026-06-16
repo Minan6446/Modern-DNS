@@ -105,6 +105,17 @@ export const useDomainStore = defineStore('domain', () => {
     }
   }
 
+  const importZonesFile = async (file: File, importRecords = true): Promise<zoneApi.ZoneImportResult> => {
+    submitting.value = true
+    try {
+      const { data } = await zoneApi.importZonesFile(file, importRecords)
+      await fetchDomainData()
+      return data
+    } finally {
+      submitting.value = false
+    }
+  }
+
   const updateZone = async (id: number | string | string[], payload: Partial<DomainZone>): Promise<void> => {
     submitting.value = true
     try {
@@ -251,6 +262,7 @@ export const useDomainStore = defineStore('domain', () => {
     getZoneById,
     getDetailById,
     createZone,
+    importZonesFile,
     updateZone,
     batchUpdateZoneStatus,
     deleteZones,

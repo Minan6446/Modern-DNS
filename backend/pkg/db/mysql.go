@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -15,7 +16,7 @@ import (
 
 var DB *gorm.DB
 
-func InitMySQL() {
+func InitMySQL() error {
 	dsn := config.C.MySQL.DSN
 	// Append interpolateParams to avoid extra Prepare round-trip on remote DB
 	if !strings.Contains(dsn, "interpolateParams") {
@@ -41,16 +42,17 @@ func InitMySQL() {
 		PrepareStmt: true, // cache prepared statements
 	})
 	if err != nil {
-		log.Fatalf("[mysql] connect failed: %v", err)
+		return fmt.Errorf("mysql connect: %w", err)
 	}
 
 	sqlDB, _ := DB.DB()
-	sqlDB.SetMaxOpenConns(50)
-	sqlDB.SetMaxIdleConns(25) // keep more idle conns alive for remote DB
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetMaxIdleConns(50) // keep more idle conns alive for remote DB
 	sqlDB.SetConnMaxLifetime(10 * time.Minute)
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
 	log.Println("[mysql] connected")
+	return nil
 }
 
 // ApplyPool re-tunes the live *sql.DB pool. Called on startup (after

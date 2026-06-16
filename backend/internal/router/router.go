@@ -119,6 +119,7 @@ func Setup(r *gin.Engine) {
 
 			domain.GET("/zones", handler.ListZones)
 			domain.POST("/zones", domainWrite, handler.CreateZone)
+			domain.POST("/zones/import", domainWrite, handler.ImportZones)
 			domain.GET("/zones/:id", handler.GetZoneDetail)
 			domain.PUT("/zones/:id", domainWrite, handler.UpdateZone)
 			domain.DELETE("/zones/:id", domainWrite, handler.DeleteZone)

@@ -14,6 +14,7 @@ import (
 	"modern-dns/internal/handler"
 	"modern-dns/internal/model"
 	"modern-dns/internal/router"
+	"modern-dns/migrations"
 	"modern-dns/pkg/alertengine"
 	"modern-dns/pkg/cluster"
 	"modern-dns/pkg/db"
@@ -28,7 +29,9 @@ import (
 )
 
 func main() {
-	config.Init()
+	if err := config.Init(); err != nil {
+		log.Fatalf("[config] %v", err)
+	}
 
 	// Top-level cancellable context. Cancelled when the process
 	// receives SIGINT / SIGTERM so every long-running goroutine
@@ -40,8 +43,15 @@ func main() {
 
 	gin.SetMode(config.C.Server.Mode)
 
-	db.InitMySQL()
-	db.InitRedis()
+	if err := db.InitMySQL(); err != nil {
+		log.Fatalf("[mysql] %v", err)
+	}
+	if err := db.RunBootstrapSchema(migrations.SchemaSQL); err != nil {
+		log.Fatalf("[db] bootstrap schema failed: %v", err)
+	}
+	if err := db.InitRedis(); err != nil {
+		log.Fatalf("[redis] %v", err)
+	}
 	if err := db.DB.AutoMigrate(
 		// Auth & RBAC
 		&model.Role{}, &model.User{}, &model.RolePermission{}, &model.OperationLog{},

@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "backupId": "BK-AUTO-1781503451319",
+  "backupTime": "2026-06-15T14:04:11+08:00",
+  "backupScope": [
+    "系统配置",
+    "域名解析",
+    "黑白名单",
+    "安全规则"
+  ],
+  "data": {
+    "acl_rules": [],
+    "bw_rules": [],
+    "cache_global_strategy": [
+      {
+        "id": 1,
+        "ttlMax": 86400,
+        "minRetain": 300,
+        "autoCleanup": true,
+        "cleanupCycle": "hourly",
+        "updatedAt": "2026-06-08T10:31:31+08:00"
+      }
+    ],
+    "ddos_domain_rules": [],
+    "ddos_global": [
+      {
+        "id": 1,
+        "enabled": true,
+        "qpsLimit": 10000,
+        "currentQps": 0,
+        "perIpConnLimit": 0,
+        "memSoftMb": 0,
+        "memHardMb": 0,
+        "perIpQps": 0,
+        "perIpBurst": 0,
+        "updatedAt": "2026-06-08T10:31:31+08:00"
+      }
+    ],
+    "dns_records": [],
+    "forward_global": [
+      {
+        "id": 1,
+        "enabled": true,
+        "publicDns": "AliDNS",
+        "publicDnsEnabled": true,
+        "publicDnsCustom": "",
+        "timeout": 5,
+        "retries": 2,
+        "strategy": "priority",
+        "lbGroupId": null
+      }
+    ],
+    "notice_config": [],
+    "rpz_rules": [],
+    "system_config": [
+      {
+        "id": 1,
+        "timezone": "UTC+8",
+        "language": "zh-CN",
+        "autoBackup": true,
+        "backupCycle": "每日",
+        "backupRetentionDays": 30,
+        "backupStorageType": "local",
+        "backupStoragePath": "",
+        "dnssecGlobal": false,
+        "defaultTtl": 3600,
+        "negativeCacheTtl": 300,
+        "ecsEnabled": false,
+        "dohEnabled": false,
+        "dotEnabled": false,
+        "minTtl": 0,
+        "maxTtl": 0,
+        "upstreamProtocolOrder": "udp,tcp",
+        "upstreamTimeoutMs": 2000,
+        "dohPreferGet": false,
+        "ecsPrefixV4": 24,
+        "ecsPrefixV6": 56,
+        "dnsPaddingEnabled": false,
+        "dnsPaddingBlock": 128,
+        "loginTimeoutMinutes": 30,
+        "loginMaxFailures": 5,
+        "loginLockMinutes": 15,
+        "mfaRequired": false,
+        "ipWhitelist": "",
+        "pwdMinLength": 8,
+        "pwdRequireUpper": true,
+        "pwdRequireLower": true,
+        "pwdRequireDigit": true,
+        "pwdRequireSymbol": false,
+        "pwdExpireDays": 0,
+        "maxConcurrentLogin": 0,
+        "sessionLegacyGraceDays": 7,
+        "dbMaxOpenConns": 50,
+        "dbMaxIdleConns": 25,
+        "dbConnMaxLifetimeMin": 10,
+        "dbConnMaxIdleMin": 5,
+        "ntpEnabled": true,
+        "ntpServers": "",
+        "ntpCheckIntervalSec": 300,
+        "ntpLastSync": "2026-06-15T14:03:46.086+08:00",
+        "ntpLastDriftMs": -51,
+        "ntpLastError": "",
+        "logRetentionDays": 90,
+        "logLevel": "INFO",
+        "logExportFormat": "csv",
+        "syslogEnabled": false,
+        "syslogServer": "",
+        "maintenanceEnabled": false,
+        "maintenanceWindow": "",
+        "updatedAt": "2026-06-15T14:03:46.103+08:00"
+      }
+    ],
+    "tls_certs": [],
+    "zone_dnssec": [],
+    "zone_soa": [],
+    "zones": []
+  }
+}

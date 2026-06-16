@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  app:
+    image: ${APP_IMAGE:-crpi-bs1pqa90migqepaj.cn-chengdu.personal.cr.aliyuncs.com/modern-dns/modern-dns-app:v1.3}
+    container_name: modern-dns-app
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: "8080"
+      SERVER_MODE: "release"
+
+      # ---- 修改为外部 MySQL 的连接信息 ----
+      MYSQL_DSN: "${MYSQL_USER:-dns}:${MYSQL_PASSWORD:-bas4PR7nWkXkPxSC}@tcp(${MYSQL_HOST:-10.0.11.24}:${MYSQL_PORT:-3306})/${MYSQL_DATABASE:-dns}?charset=utf8mb4&parseTime=True&loc=Local"
+
+      # ---- 修改为外部 Redis 的连接信息 ----
+      REDIS_ADDR: "${REDIS_HOST:-10.0.11.24}:${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redis123}"
+      REDIS_DB: "0"
+      REDIS_CACHE_DB: "0"
+      REDIS_SESSION_DB: "1"
+      REDIS_RATELIMIT_DB: "2"
+      REDIS_AUTH_DB: "3"
+
+      JWT_SECRET: "${JWT_SECRET:-modern-dns-secret-change-in-production}"
+      JWT_ACCESS_EXPIRE_MIN: "60"
+      JWT_REFRESH_EXPIRE_H: "168"
+
+      DNS_ENABLED: "true"
+      DNS_LISTEN: ":53"
+
+      CLUSTER_HTTPS_ENABLED: "false"
+      CLUSTER_CERT_DIR: "./certs"
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    # Linux 下如果 host.docker.internal 不生效，可以添加：
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-crpi-bs1pqa90migqepaj.cn-chengdu.personal.cr.aliyuncs.com/modern-dns/modern-dns-nginx:v1.2}
+    container_name: modern-dns-frontend
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"

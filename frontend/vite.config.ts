@@ -3,6 +3,9 @@ import vue from '@vitejs/plugin-vue'
 import Components from 'unplugin-vue-components/vite'
 import ElementPlus from 'unplugin-element-plus/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import viteCompression from 'vite-plugin-compression'
+import { visualizer } from 'rollup-plugin-visualizer'
+import { fileURLToPath, URL } from 'node:url'
 
 const ELEMENT_PLUS_CHUNK_PACKAGES = ['node_modules/element-plus/']
 const ECHARTS_CHUNK_PACKAGES = [
@@ -16,13 +19,13 @@ const COMPOSABLES_PATH = '/src/composables/'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const apiBase = env.VITE_API_BASE_URL || 'http://10.0.11.24:8080'
+  const apiBase = env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
   const isDev = mode === 'development'
 
   return {
     resolve: {
       alias: {
-        '@': new URL('./src', import.meta.url).pathname,
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
     plugins: [
@@ -37,6 +40,13 @@ export default defineConfig(({ mode }) => {
       ElementPlus({
         useSource: true,
       }),
+      ...(isDev
+        ? []
+        : [
+            viteCompression({ algorithm: 'gzip', ext: '.gz', threshold: 1024 }),
+            viteCompression({ algorithm: 'brotliCompress', ext: '.br', threshold: 1024 }),
+            visualizer({ open: false, gzipSize: true, brotliSize: true, filename: 'dist/stats.html' }),
+          ]),
     ],
     server: isDev
       ? {

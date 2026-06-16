@@ -9,8 +9,12 @@ import (
 )
 
 func main() {
-	config.Init()
-	db.InitMySQL()
+	if err := config.Init(); err != nil {
+		log.Fatalf("[config] %v", err)
+	}
+	if err := db.InitMySQL(); err != nil {
+		log.Fatalf("[mysql] %v", err)
+	}
 
 	sqls := []string{
 		// ── Missing tables ───────────────────────────────────────────

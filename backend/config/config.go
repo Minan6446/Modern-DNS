@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -82,7 +83,7 @@ type JWTConfig struct {
 
 var C Config
 
-func Init() {
+func Init() error {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("./config")
@@ -123,6 +124,7 @@ func Init() {
 	}
 
 	if err := viper.Unmarshal(&C); err != nil {
-		log.Fatalf("[config] unmarshal failed: %v", err)
+		return fmt.Errorf("unmarshal config: %w", err)
 	}
+	return nil
 }

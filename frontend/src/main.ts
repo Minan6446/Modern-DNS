@@ -1,9 +1,5 @@
 import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
-import ElementPlus from 'element-plus'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import enUs from 'element-plus/es/locale/lang/en'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import './style.css'
 import App from './App.vue'
@@ -14,10 +10,6 @@ import { useAppStore } from './stores/app'
 const app = createApp(App)
 const pinia = createPinia()
 const appStore = useAppStore(pinia)
-
-Object.entries(ElementPlusIconsVue).forEach(([key, component]) => {
-	app.component(key, component)
-})
 
 watch(
 	() => appStore.systemConfig.language,
@@ -71,11 +63,6 @@ window.addEventListener('unhandledrejection', (event) => {
 	// interceptor.
 })
 
-// Pick the Element Plus locale bundle that matches our app i18n locale
-// so DatePicker / Pagination / Form validation messages localise too.
-const elLocale = i18n.global.locale.value === 'en-US' ? enUs : zhCn
-
-app.use(ElementPlus, { locale: elLocale })
 app.use(pinia)
 app.use(i18n)
 app.use(router)

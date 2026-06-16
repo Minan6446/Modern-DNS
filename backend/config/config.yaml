@@ -3,11 +3,11 @@ server:
   mode: "debug"
 
 mysql:
-  dsn: "dns:5dSkKxsbjMmbw5jx@tcp(10.0.11.24:3306)/dns?charset=utf8mb4&parseTime=True&loc=Local"
+  dsn: "dns:bas4PR7nWkXkPxSC@tcp(10.0.11.24:3306)/dns?charset=utf8mb4&parseTime=True&loc=Local"
 
 redis:
   addr: "10.0.11.24:6379"
-  password: ""
+  password: "redis123"
   db: 0
   cache_db: 0
   session_db: 1

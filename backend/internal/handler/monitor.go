@@ -379,6 +379,13 @@ func GetMonitorReport(c *gin.Context) {
 	endTime := c.Query("endTime")
 	domain := c.Query("domain")
 
+	// Default to last 24h to avoid scanning the entire query_logs table
+	// when the caller omits both time parameters.
+	if startTime == "" && endTime == "" {
+		endTime = time.Now().Format("2006-01-02 15:04:05")
+		startTime = time.Now().Add(-24 * time.Hour).Format("2006-01-02 15:04:05")
+	}
+
 	base := db.DB.Model(&model.QueryLog{})
 	if startTime != "" {
 		base = base.Where("created_at >= ?", startTime)

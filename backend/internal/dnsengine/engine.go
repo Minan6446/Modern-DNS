@@ -468,10 +468,20 @@ func (e *Engine) reloadConfig() {
 	if err := db.DB.Where("status = ?", "启用").Find(&lbGroups).Error; err == nil {
 		e.lbLoadErrLogged = false
 		e.lbGroups = make([]lbGroupData, 0, len(lbGroups))
-		for _, g := range lbGroups {
-			var servers []model.LbServer
-			db.DB.Where("group_id = ? AND enabled = ?", g.ID, true).Find(&servers)
-			e.lbGroups = append(e.lbGroups, lbGroupData{Group: g, Servers: servers})
+		if len(lbGroups) > 0 {
+			groupIDs := make([]uint, len(lbGroups))
+			for i, g := range lbGroups {
+				groupIDs[i] = g.ID
+			}
+			var allServers []model.LbServer
+			db.DB.Where("group_id IN ? AND enabled = ?", groupIDs, true).Find(&allServers)
+			serversByGroup := make(map[uint][]model.LbServer, len(lbGroups))
+			for _, s := range allServers {
+				serversByGroup[s.GroupID] = append(serversByGroup[s.GroupID], s)
+			}
+			for _, g := range lbGroups {
+				e.lbGroups = append(e.lbGroups, lbGroupData{Group: g, Servers: serversByGroup[g.ID]})
+			}
 		}
 	} else if !e.lbLoadErrLogged {
 		log.Printf("[dns-engine] skipping lb_groups: %v", err)

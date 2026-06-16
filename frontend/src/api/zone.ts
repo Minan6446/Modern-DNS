@@ -38,6 +38,14 @@ export interface ZoneCreatePayload {
   axfrInsecure?: boolean
 }
 
+export interface ZoneImportResult {
+  imported: number
+  skipped: number
+  importRecords?: boolean
+  recordsImported?: number
+  recordsSkipped?: number
+}
+
 export interface ZoneUpdatePayload {
   type?: string
   remark?: string
@@ -84,6 +92,16 @@ export const getZoneDetail = (zoneId: number | string): Promise<ApiResponse<Doma
 /** 新增区域 */
 export const createZone = (payload: ZoneCreatePayload): Promise<ApiResponse<DomainZone>> =>
   request.post('/domain/zones', payload)
+
+/** 上传文件批量导入区域（json/xlsx/xls/zone/txt） */
+export const importZonesFile = (file: File, importRecords = true): Promise<ApiResponse<ZoneImportResult>> => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('importRecords', importRecords ? 'true' : 'false')
+  return request.post('/domain/zones/import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }) as Promise<ApiResponse<ZoneImportResult>>
+}
 
 /** 编辑区域基本信息 */
 export const updateZone = (

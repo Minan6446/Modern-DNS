@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"modern-dns/config"
@@ -30,28 +31,42 @@ func newClient(dbIndex int) *redis.Client {
 	})
 }
 
-func initClient(name string, dbIndex int) *redis.Client {
+func initClient(name string, dbIndex int) (*redis.Client, error) {
 	client := newClient(dbIndex)
 	if err := client.Ping(context.Background()).Err(); err != nil {
-		log.Fatalf("[redis] connect failed (%s, db=%d): %v", name, dbIndex, err)
+		return nil, fmt.Errorf("redis connect (%s, db=%d): %w", name, dbIndex, err)
 	}
 	log.Printf("[redis] connected (%s, db=%d)", name, dbIndex)
-	return client
+	return client, nil
 }
 
-func InitRedis() {
+func InitRedis() error {
 	fallbackDB := config.C.Redis.DB
 	cacheDB := pickDB(config.C.Redis.CacheDB, fallbackDB)
 	sessionDB := pickDB(config.C.Redis.SessionDB, fallbackDB)
 	rateLimitDB := pickDB(config.C.Redis.RateLimitDB, fallbackDB)
 	authDB := pickDB(config.C.Redis.AuthDB, fallbackDB)
 
-	RDBCache = initClient("cache", cacheDB)
-	RDBSession = initClient("session", sessionDB)
-	RDBRateLimit = initClient("ratelimit", rateLimitDB)
-	RDBAuth = initClient("auth", authDB)
+	var err error
+	RDBCache, err = initClient("cache", cacheDB)
+	if err != nil {
+		return err
+	}
+	RDBSession, err = initClient("session", sessionDB)
+	if err != nil {
+		return err
+	}
+	RDBRateLimit, err = initClient("ratelimit", rateLimitDB)
+	if err != nil {
+		return err
+	}
+	RDBAuth, err = initClient("auth", authDB)
+	if err != nil {
+		return err
+	}
 
 	// Legacy alias kept for backward compatibility with yet-to-be-migrated
 	// call sites. New code should use the per-concern clients above.
 	RDB = RDBCache
+	return nil
 }

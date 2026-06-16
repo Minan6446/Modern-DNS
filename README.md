@@ -38,18 +38,19 @@ Modern DNS 是一个前后端一体化的 DNS 管理平台，提供域名解析�
 ```
 
 更多子模块说明：
-
+- 前端控制台: `http://localhost`
+- API: `http://localhost/api`（由前端 Nginx 反向代理到后端）
 - backend/README.md
 - docs/notification-template-examples.md
 
-## 快速开始
+- `docker-compose.yml` 会同时启动 MySQL、Redis、后端 API、前端 Nginx。
 
 ### 1. 环境准备
 
 - Go >= 1.22
 - Node.js >= 20
 - npm >= 9
-- MySQL >= 8
+- MySQL >= 8.0
 - Redis >= 7
 
 ### 2. 初始化数据库
@@ -105,6 +106,49 @@ npm run test:run
 npm run lint
 npm run format:check
 ```
+
+## Docker 部署
+
+### 构建后端镜像
+
+在项目根目录执行：
+
+```bash
+docker build -t modern-dns:latest .
+```
+
+### 使用 Docker Compose 一键启动（推荐）
+
+1. 复制环境变量模板：
+
+```bash
+cp .env.docker.example .env
+```
+
+并按实际情况修改：
+
+- `APP_IMAGE`、`FRONTEND_IMAGE`（镜像仓库地址与 tag）
+- `MYSQL_*`、`REDIS_PASSWORD`、`JWT_SECRET`
+
+2. 启动服务：
+
+```bash
+docker compose up -d --build
+```
+
+3. 访问接口：
+
+- 前端控制台: `http://localhost`
+- API: `http://localhost/api`（由前端 Nginx 反向代理到后端）
+- DNS: `53/udp`、`53/tcp`
+
+说明：
+
+- `docker-compose.yml` 会同时启动 MySQL、Redis、后端 API、前端 Nginx。
+- 前端 Nginx 配置位于 `frontend/nginx/nginx.conf` 与 `frontend/nginx/default.conf`。
+- 镜像拉取版不依赖本地源码目录，服务器只需 `docker-compose.yml` 与 `.env`。
+- 后端启动时会自动执行内嵌的 `backend/migrations/schema.sql`（跳过 `CREATE DATABASE/USE`），无需手动进入数据库容器执行初始化 SQL。
+- 若主机已占用 53 端口，请修改 `docker-compose.yml` 的 `app.ports` 映射。
 
 ## 功能模块
 

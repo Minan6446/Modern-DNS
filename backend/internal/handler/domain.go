@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -15,8 +17,205 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/miekg/dns"
+	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
+
+type zoneImportItem struct {
+	Type         string
+	Domain       string
+	ZoneID       string
+	Upstream     string
+	Remark       string
+	Transport    string
+	AXFRInsecure bool
+}
+
+func newZoneID() string {
+	return "Z-" + time.Now().Format("20060102") + "-" + strconv.FormatInt(time.Now().UnixMilli()%10000, 10)
+}
+
+func normalizeZoneType(value string) string {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "primary":
+		return "Primary"
+	case "secondary":
+		return "Secondary"
+	case "reverse":
+		return "Reverse"
+	case "stub":
+		return "Stub"
+	case "forward":
+		return "Forward"
+	default:
+		return ""
+	}
+}
+
+func normalizeTransport(value string) string {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "tcp", "tls", "quic":
+		return v
+	default:
+		return ""
+	}
+}
+
+func normalizeDomainName(value string) string {
+	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(value), "."))
+}
+
+func parseZoneDomainFromZoneText(content string) string {
+	for _, raw := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(raw)
+		if idx := strings.Index(line, ";"); idx >= 0 {
+			line = strings.TrimSpace(line[:idx])
+		}
+		if line == "" {
+			continue
+		}
+		upper := strings.ToUpper(line)
+		if strings.HasPrefix(upper, "$ORIGIN") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				return normalizeDomainName(parts[1])
+			}
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		for i := 0; i < len(parts); i++ {
+			if strings.EqualFold(parts[i], "SOA") {
+				if parts[0] != "@" {
+					return normalizeDomainName(parts[0])
+				}
+				break
+			}
+		}
+	}
+	return ""
+}
+
+func parseZoneDomainFromFilename(filename string) string {
+	cleaned := strings.TrimSuffix(filename, ".zone")
+	cleaned = strings.TrimSuffix(cleaned, ".txt")
+	return normalizeDomainName(cleaned)
+}
+
+func parseBoolLike(value string) bool {
+	v := strings.ToLower(strings.TrimSpace(value))
+	return v == "1" || v == "true" || v == "yes" || v == "y"
+}
+
+func valueAsString(m map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if v, ok := m[key]; ok {
+			switch x := v.(type) {
+			case string:
+				if strings.TrimSpace(x) != "" {
+					return strings.TrimSpace(x)
+				}
+			case float64:
+				return strconv.FormatInt(int64(x), 10)
+			case bool:
+				if x {
+					return "true"
+				}
+				return "false"
+			}
+		}
+	}
+	return ""
+}
+
+func itemFromMap(m map[string]interface{}) zoneImportItem {
+	return zoneImportItem{
+		Type:         valueAsString(m, "type", "Zone类型", "类型"),
+		Domain:       valueAsString(m, "domain", "域名/Zone名称", "zone", "域名"),
+		ZoneID:       valueAsString(m, "zoneId", "Zone ID"),
+		Upstream:     valueAsString(m, "upstream", "上游服务器"),
+		Remark:       valueAsString(m, "remark", "域名备注", "备注"),
+		Transport:    valueAsString(m, "transport", "传输协议", "传输"),
+		AXFRInsecure: parseBoolLike(valueAsString(m, "axfrInsecure", "AXFR不安全")),
+	}
+}
+
+func parseZonesFromJSON(content []byte) ([]zoneImportItem, error) {
+	trimmed := bytes.TrimSpace(content)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("JSON 内容为空")
+	}
+
+	if trimmed[0] == '[' {
+		var rows []map[string]interface{}
+		if err := json.Unmarshal(trimmed, &rows); err != nil {
+			return nil, err
+		}
+		out := make([]zoneImportItem, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, itemFromMap(row))
+		}
+		return out, nil
+	}
+
+	var wrapped map[string]interface{}
+	if err := json.Unmarshal(trimmed, &wrapped); err != nil {
+		return nil, err
+	}
+	if listVal, ok := wrapped["list"]; ok {
+		if list, ok := listVal.([]interface{}); ok {
+			out := make([]zoneImportItem, 0, len(list))
+			for _, rowVal := range list {
+				row, ok := rowVal.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				out = append(out, itemFromMap(row))
+			}
+			return out, nil
+		}
+	}
+
+	return nil, fmt.Errorf("JSON 需为数组或包含 list 数组")
+}
+
+func parseZonesFromExcel(content []byte) ([]zoneImportItem, error) {
+	f, err := excelize.OpenReader(bytes.NewReader(content))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	sheets := f.GetSheetList()
+	if len(sheets) == 0 {
+		return nil, fmt.Errorf("Excel 文件没有工作表")
+	}
+	rows, err := f.GetRows(sheets[0])
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) < 2 {
+		return nil, fmt.Errorf("Excel 内容为空或缺少数据行")
+	}
+
+	headers := rows[0]
+	items := make([]zoneImportItem, 0, len(rows)-1)
+	for _, row := range rows[1:] {
+		obj := map[string]interface{}{}
+		for i, h := range headers {
+			if i >= len(row) {
+				continue
+			}
+			obj[strings.TrimSpace(h)] = strings.TrimSpace(row[i])
+		}
+		items = append(items, itemFromMap(obj))
+	}
+	return items, nil
+}
 
 // GET /api/domain/zones
 func ListZones(c *gin.Context) {
@@ -86,7 +285,7 @@ func CreateZone(c *gin.Context) {
 		return
 	}
 	zone.ID = 0
-	zone.ZoneID = "Z-" + time.Now().Format("20060102") + "-" + strconv.FormatInt(time.Now().UnixMilli()%10000, 10)
+	zone.ZoneID = newZoneID()
 	// Zone vocabulary is {正常, 异常, 同步中, 禁用} (matches the UI
 	// badge / i18n dictionary). It deliberately does NOT use "启用"
 	// like records / forward rules etc.: the engine's zone loader
@@ -111,6 +310,176 @@ func CreateZone(c *gin.Context) {
 	// this the resolver picks it up only on the next 10s reload tick.
 	dnsengine.Trigger()
 	resp.OK(c, zone)
+}
+
+// POST /api/domain/zones/import  —  批量导入区域（支持 JSON / Excel / BIND zone）
+func ImportZones(c *gin.Context) {
+	importRecords := true
+	if raw := strings.TrimSpace(c.PostForm("importRecords")); raw != "" {
+		importRecords = parseBoolLike(raw)
+	}
+
+	file, fh, err := c.Request.FormFile("file")
+	if err != nil {
+		resp.BadRequest(c, "请上传文件（字段名：file）")
+		return
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		resp.ServerError(c, "文件读取失败")
+		return
+	}
+	filename := strings.ToLower(strings.TrimSpace(fh.Filename))
+
+	items := make([]zoneImportItem, 0)
+	zoneRecordsByDomain := map[string][]model.DNSRecord{}
+	switch {
+	case strings.HasSuffix(filename, ".json"):
+		items, err = parseZonesFromJSON(content)
+		if err != nil {
+			resp.BadRequest(c, "JSON 解析失败: "+err.Error())
+			return
+		}
+	case strings.HasSuffix(filename, ".xlsx") || strings.HasSuffix(filename, ".xls"):
+		items, err = parseZonesFromExcel(content)
+		if err != nil {
+			resp.BadRequest(c, "Excel 解析失败: "+err.Error())
+			return
+		}
+	case strings.HasSuffix(filename, ".zone") || strings.HasSuffix(filename, ".txt"):
+		text := strings.TrimPrefix(string(content), "\xef\xbb\xbf")
+		domain := parseZoneDomainFromZoneText(text)
+		if domain == "" {
+			domain = parseZoneDomainFromFilename(filename)
+		}
+		if domain == "" {
+			resp.BadRequest(c, "Zone 文件未识别到域名，请补充 $ORIGIN 或使用 example.com.zone 文件名")
+			return
+		}
+		items = append(items, zoneImportItem{
+			Type:      "Primary",
+			Domain:    domain,
+			Remark:    "Zone 文件导入 (" + fh.Filename + ")",
+			Transport: "tcp",
+		})
+		zoneRecordsByDomain[domain] = parseZoneFile(text)
+	default:
+		resp.BadRequest(c, "不支持的文件格式，仅支持 .json / .xlsx / .xls / .zone / .txt")
+		return
+	}
+
+	if len(items) == 0 {
+		resp.BadRequest(c, "文件中未找到可导入区域")
+		return
+	}
+
+	imported, skipped := 0, 0
+	recordsImported, recordsSkipped := 0, 0
+	seen := make(map[string]struct{}, len(items))
+
+	for _, item := range items {
+		domain := normalizeDomainName(item.Domain)
+		if domain == "" {
+			skipped++
+			continue
+		}
+		if _, ok := seen[domain]; ok {
+			skipped++
+			continue
+		}
+		seen[domain] = struct{}{}
+
+		if _, ok := dns.IsDomainName(domain + "."); !ok {
+			skipped++
+			continue
+		}
+
+		zoneType := normalizeZoneType(item.Type)
+		if zoneType == "" {
+			zoneType = "Primary"
+		}
+
+		transport := normalizeTransport(item.Transport)
+		if transport == "" {
+			transport = "tcp"
+		}
+
+		zoneID := strings.TrimSpace(item.ZoneID)
+		if zoneID == "" {
+			zoneID = newZoneID()
+		}
+
+		var existing model.Zone
+		err := db.DB.Where("domain = ?", domain).First(&existing).Error
+		if err == nil {
+			if importRecords {
+				if records, ok := zoneRecordsByDomain[domain]; ok && len(records) > 0 {
+					for _, r := range records {
+						if importRecord(int(existing.ID), r.Type, r.Host, r.Value, r.TTL, r.Status, r.Remark) {
+							recordsImported++
+						} else {
+							recordsSkipped++
+						}
+					}
+				}
+			}
+			skipped++
+			continue
+		}
+		if err != nil && err != gorm.ErrRecordNotFound {
+			resp.DBError(c, err)
+			return
+		}
+
+		var zoneIDCount int64
+		db.DB.Model(&model.Zone{}).Where("zone_id = ?", zoneID).Count(&zoneIDCount)
+		if zoneIDCount > 0 {
+			skipped++
+			continue
+		}
+
+		zone := model.Zone{
+			ZoneID:       zoneID,
+			Domain:       domain,
+			Type:         zoneType,
+			Status:       "正常",
+			Remark:       strings.TrimSpace(item.Remark),
+			Upstream:     strings.TrimSpace(item.Upstream),
+			Transport:    transport,
+			AXFRInsecure: item.AXFRInsecure,
+			Serial:       time.Now().Format("20060102") + "01",
+		}
+		if err := db.DB.Create(&zone).Error; err != nil {
+			resp.DBError(c, err)
+			return
+		}
+
+		if importRecords {
+			if records, ok := zoneRecordsByDomain[domain]; ok && len(records) > 0 {
+				for _, r := range records {
+					if importRecord(int(zone.ID), r.Type, r.Host, r.Value, r.TTL, r.Status, r.Remark) {
+						recordsImported++
+					} else {
+						recordsSkipped++
+					}
+				}
+			}
+		}
+		imported++
+	}
+
+	if imported > 0 || recordsImported > 0 {
+		dnsengine.Trigger()
+	}
+	resp.OK(c, gin.H{
+		"imported":        imported,
+		"skipped":         skipped,
+		"importRecords":   importRecords,
+		"recordsImported": recordsImported,
+		"recordsSkipped":  recordsSkipped,
+	})
 }
 
 // PUT /api/domain/zones/:id  —  编辑

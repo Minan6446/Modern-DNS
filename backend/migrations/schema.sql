@@ -103,8 +103,12 @@ CREATE TABLE IF NOT EXISTS alert_events (
   triggered_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_status (status),
-  INDEX idx_level (level)
+  INDEX idx_level (level),
+  INDEX idx_triggered (triggered_at)
 ) ENGINE=InnoDB;
+
+-- Safe index additions for dbs created before these indexes existed.
+ALTER TABLE alert_events ADD INDEX idx_triggered (triggered_at);
 
 CREATE TABLE IF NOT EXISTS alert_audit_logs (
   id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -170,8 +174,11 @@ CREATE TABLE IF NOT EXISTS dns_records (
   updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_zone (zone_id),
   INDEX idx_type (type),
-  INDEX idx_created (created_at)
+  INDEX idx_created (created_at),
+  INDEX idx_dr_status (status)
 ) ENGINE=InnoDB;
+
+ALTER TABLE dns_records ADD INDEX idx_dr_status (status);
 
 CREATE TABLE IF NOT EXISTS zone_soa (
   id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -244,8 +251,11 @@ CREATE TABLE IF NOT EXISTS forward_servers (
   status     VARCHAR(16)  NOT NULL DEFAULT '启用',
   created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_priority (priority)
+  INDEX idx_priority (priority),
+  INDEX idx_fs_status (status)
 ) ENGINE=InnoDB;
+
+ALTER TABLE forward_servers ADD INDEX idx_fs_status (status);
 
 CREATE TABLE IF NOT EXISTS forward_rules (
   id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -280,8 +290,11 @@ CREATE TABLE IF NOT EXISTS cache_domain_rules (
   custom_retain  INT          NOT NULL DEFAULT 600,
   status         VARCHAR(16)  NOT NULL DEFAULT '启用',
   created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_cdr_status (status)
 ) ENGINE=InnoDB;
+
+ALTER TABLE cache_domain_rules ADD INDEX idx_cdr_status (status);
 
 -- 手动清理历史：每次「手动清理」执行后写入一行，UI 直接读这张表渲染
 -- 「清理历史」面板。和 operation_logs 解耦的原因在 model.go 注释里。
@@ -332,8 +345,11 @@ CREATE TABLE IF NOT EXISTS ddos_domain_rules (
   qps_limit  INT          NOT NULL DEFAULT 1000,
   status     VARCHAR(16)  NOT NULL DEFAULT '启用',
   created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_ddr_status (status)
 ) ENGINE=InnoDB;
+
+ALTER TABLE ddos_domain_rules ADD INDEX idx_ddr_status (status);
 
 CREATE TABLE IF NOT EXISTS acl_rules (
   id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -347,8 +363,14 @@ CREATE TABLE IF NOT EXISTS acl_rules (
   status      VARCHAR(16)  NOT NULL DEFAULT '启用',
   remark      VARCHAR(512) NOT NULL DEFAULT '',
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_acl_status (status),
+  INDEX idx_acl_type (type)
 ) ENGINE=InnoDB;
+
+ALTER TABLE acl_rules ADD INDEX idx_acl_status (status);
+
+ALTER TABLE acl_rules ADD INDEX idx_acl_type (type);
 
 CREATE TABLE IF NOT EXISTS rpz_rules (
   id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -361,8 +383,14 @@ CREATE TABLE IF NOT EXISTS rpz_rules (
   hit_count   INT          NOT NULL DEFAULT 0,
   status      VARCHAR(16)  NOT NULL DEFAULT '启用',
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_rpz_status (status),
+  INDEX idx_rpz_category (category)
 ) ENGINE=InnoDB;
+
+ALTER TABLE rpz_rules ADD INDEX idx_rpz_status (status);
+
+ALTER TABLE rpz_rules ADD INDEX idx_rpz_category (category);
 
 CREATE TABLE IF NOT EXISTS security_dnssec (
   id               BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -412,8 +440,20 @@ CREATE TABLE IF NOT EXISTS query_logs (
   INDEX idx_domain (domain),
   INDEX idx_source (source_ip),
   INDEX idx_status (response_status),
-  INDEX idx_created (created_at)
+  INDEX idx_created (created_at),
+  INDEX idx_qlog_created_domain (created_at, domain),
+  INDEX idx_qlog_rcode (rcode),
+  INDEX idx_qlog_record_type (record_type)
 ) ENGINE=InnoDB;
+
+-- Safe index additions for databases created before these indexes existed.
+-- MySQL ignores ADD INDEX IF NOT EXISTS in older versions, so we guard with
+-- a conditional that silently skips when the index already exists.
+ALTER TABLE query_logs ADD INDEX idx_qlog_created_domain (created_at, domain);
+
+ALTER TABLE query_logs ADD INDEX idx_qlog_rcode (rcode);
+
+ALTER TABLE query_logs ADD INDEX idx_qlog_record_type (record_type);
 
 CREATE TABLE IF NOT EXISTS monitor_qps_rule (
   id                       BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -638,8 +678,11 @@ CREATE TABLE IF NOT EXISTS lb_groups (
   health_check_interval INT          NOT NULL DEFAULT 10,
   status                VARCHAR(16)  NOT NULL DEFAULT '启用',
   created_at            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_lbg_status (status)
 ) ENGINE=InnoDB;
+
+ALTER TABLE lb_groups ADD INDEX idx_lbg_status (status);
 
 CREATE TABLE IF NOT EXISTS lb_servers (
   id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

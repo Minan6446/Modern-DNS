@@ -876,8 +876,8 @@ type SystemConfig struct {
 	// Live-tunable. Applied on save via db.ApplyPoolFromSystemConfig
 	// so operators can adjust pool sizing under load without restart.
 	// Zero on any field means "keep the current value".
-	DBMaxOpenConns       int `gorm:"default:50" json:"dbMaxOpenConns"`
-	DBMaxIdleConns       int `gorm:"default:25" json:"dbMaxIdleConns"`
+	DBMaxOpenConns       int `gorm:"default:100" json:"dbMaxOpenConns"`
+	DBMaxIdleConns       int `gorm:"default:50" json:"dbMaxIdleConns"`
 	DBConnMaxLifetimeMin int `gorm:"default:10" json:"dbConnMaxLifetimeMin"`
 	DBConnMaxIdleMin     int `gorm:"default:5" json:"dbConnMaxIdleMin"`
 

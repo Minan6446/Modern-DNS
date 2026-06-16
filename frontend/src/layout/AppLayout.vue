@@ -29,11 +29,11 @@
  *   - moves the brand mark from sidebar-top to header-left
  *   - adds a bottom footer with slogan + version
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Fold, Expand } from '@element-plus/icons-vue'
+import { Fold, Expand, Odometer, Connection, SwitchFilled, Lock, Monitor, Tools, Cpu, Setting } from '@element-plus/icons-vue'
 import { useAppStore } from '../stores/app'
 import { useAlertStore } from '../stores/alert'
 import BrandLogo from '../components/BrandLogo.vue'
@@ -44,6 +44,19 @@ const router = useRouter()
 const { t } = useI18n()
 const appStore = useAppStore()
 const alertStore = useAlertStore()
+
+// Sidebar icons — explicitly imported because <component :is="string">
+// dynamic resolution can't be statically analysed by unplugin-vue-components.
+const menuIcons: Record<string, Component> = {
+  Odometer,
+  Connection,
+  SwitchFilled,
+  Lock,
+  Monitor,
+  Tools,
+  Cpu,
+  Setting,
+}
 
 const breadcrumbs = computed(() =>
   route.matched.filter((item) => item.meta?.titleKey),
@@ -234,7 +247,7 @@ const footerSlogan = computed(() => {
               :hide-timeout="300"
             >
               <template #title>
-                <el-icon><component :is="group.icon" /></el-icon>
+                <el-icon><component :is="menuIcons[group.icon]" /></el-icon>
                 <span>{{ $t('menu.' + group.titleKey) }}</span>
               </template>
               <el-menu-item
@@ -487,7 +500,7 @@ const footerSlogan = computed(() => {
 }
 
 :deep(.aside-menu .el-sub-menu .el-menu-item) {
-  padding-left: 52px !important;
+  padding-left: 40px !important;
   font-size: 13px;
 }
 
