@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import type { FormInstance, FormRules, UploadRawFile } from 'element-plus'
+import type { FormInstance, FormRules, UploadFile, UploadRawFile } from 'element-plus'
 import {
   ArrowDown,
   CircleCheckFilled,
@@ -17,8 +17,8 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { useDomainStore } from '../../stores/domain'
-import type { DomainZone } from '../../types/modules'
-import { syncSecondaryZone, getZoneOptions, saveZoneOptions as apiSaveZoneOptions } from '../../api/zone'
+import type { DomainRecord, DomainZone } from '../../types/modules'
+import { syncSecondaryZone, getZoneOptions, saveZoneOptions as apiSaveZoneOptions, getRecords } from '../../api/zone'
 import type { ZoneOptionsPayload } from '../../api/zone'
 import { formatDateTime } from '../../utils/datetime'
 import BaseModal from '../../components/BaseModal.vue'
@@ -95,6 +95,15 @@ const switchingZoneId = ref<number | null>(null)
 const syncingZoneId = ref<number | null>(null)
 const exportLoading = ref(false)
 const importLoading = ref(false)
+const importWithRecords = ref(true)
+const zoneImportGuideVisible = ref(false)
+const zoneImportGuideStorageKey = 'modern-dns:guide:zone-import'
+const zoneImportGuideSeen = ref(false)
+try {
+  zoneImportGuideSeen.value = globalThis.localStorage?.getItem(zoneImportGuideStorageKey) === '1'
+} catch {
+  zoneImportGuideSeen.value = false
+}
 const refreshCooldown = ref(false)
 let sortDebounceTimer: number | null = null
 let refreshCooldownTimer: number | null = null
@@ -583,15 +592,27 @@ const exportZones = async (fileType: ExportType) => {
     return
   }
   exportLoading.value = true
-  const rows = selectedRows.value.length ? selectedRows.value : sortedFilteredZones.value
-  if (!rows.length) {
+  const zones = selectedRows.value.length ? selectedRows.value : sortedFilteredZones.value
+  if (!zones.length) {
     ElMessage.warning(t('zone.noExportData'))
     exportLoading.value = false
     return
   }
   try {
+    // ── Fetch records for every exported zone ──
+    const zoneRecords: Record<number, DomainRecord[]> = {}
+    for (const z of zones) {
+      try {
+        const res = await getRecords(z.id)
+        zoneRecords[z.id] = res.data ?? []
+      } catch {
+        zoneRecords[z.id] = []
+      }
+    }
+
     if (fileType === 'json') {
-      const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json;charset=utf-8' })
+      const payload = zones.map((z) => ({ ...z, records: zoneRecords[z.id] ?? [] }))
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -600,10 +621,28 @@ const exportZones = async (fileType: ExportType) => {
       URL.revokeObjectURL(url)
     } else {
       const XLSX = await import('xlsx')
-      const worksheet = XLSX.utils.json_to_sheet(rows)
-      const workbook = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Zones')
-      XLSX.writeFile(workbook, 'zones.xlsx')
+      const wb = XLSX.utils.book_new()
+
+      // Sheet 1 — zone list
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(zones), '区域列表')
+
+      // One sheet per zone — its DNS records
+      const usedNames = new Set<string>(['区域列表'])
+      for (const z of zones) {
+        const records = zoneRecords[z.id] ?? []
+        if (!records.length) continue
+        let name = z.domain.replace(/[\[\]:*?/\\]/g, '_').slice(0, 31)
+        // Deduplicate — append counter when truncated names collide
+        if (usedNames.has(name)) {
+          for (let i = 2; ; i++) {
+            const candidate = name.slice(0, 28) + '_' + i
+            if (!usedNames.has(candidate)) { name = candidate; break }
+          }
+        }
+        usedNames.add(name)
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(records), name)
+      }
+      XLSX.writeFile(wb, 'zones.xlsx')
     }
     ElMessage.success(t('zone.exportDone'))
   } finally {
@@ -615,36 +654,67 @@ const handleExportCommand = async (command) => {
   await exportZones(command as ExportType)
 }
 
+const onUploadChange = (uploadFile: UploadFile) => {
+  const raw = uploadFile.raw
+  if (!raw) return
+  parseImportedRows(raw as UploadRawFile)
+}
+
 const parseImportedRows = async (file: UploadRawFile) => {
   if (importLoading.value) {
     return false
   }
   importLoading.value = true
   try {
-    const raw = await file.arrayBuffer()
-    let rows: Array<Record<string, any>> = []
-    if (file.name.endsWith('.json')) {
-      rows = JSON.parse(new TextDecoder().decode(raw))
-    } else {
-      const XLSX = await import('xlsx')
-      const workbook = XLSX.read(raw)
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-      rows = XLSX.utils.sheet_to_json(firstSheet)
+    const result = await domainStore.importZonesFile(file, importWithRecords.value)
+    ElMessage.success(t('zone.importDone', { count: result.imported }))
+    if ((result.recordsImported ?? 0) > 0 || (result.recordsSkipped ?? 0) > 0) {
+      ElMessage.info(`记录导入：成功 ${result.recordsImported ?? 0} 条，跳过 ${result.recordsSkipped ?? 0} 条`)
     }
-    for (const item of rows) {
-      await domainStore.createZone({
-        type: item.type || item['Zone类型'] || 'Primary',
-        domain: item.domain || item['域名/Zone名称'] || item.zone || 'imported.zone',
-        zoneId: item.zoneId || item['Zone ID'],
-        upstream: item.upstream || item['上游服务器'] || '',
-        remark: item.remark || item['域名备注'] || '',
-      })
+    if (result.skipped > 0) {
+      ElMessage.warning(`已跳过 ${result.skipped} 条重复或无效区域`)
     }
-    ElMessage.success(t('zone.importDone', { count: rows.length }))
   } finally {
     importLoading.value = false
   }
   return false
+}
+
+const dismissZoneImportGuide = () => {
+  zoneImportGuideVisible.value = false
+  zoneImportGuideSeen.value = true
+  try {
+    globalThis.localStorage?.setItem(zoneImportGuideStorageKey, '1')
+  } catch {
+    // ignore localStorage failures
+  }
+}
+
+const handleZoneImportButtonClick = (event: MouseEvent) => {
+  if (zoneImportGuideSeen.value) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  zoneImportGuideVisible.value = true
+}
+
+const openZoneImportPicker = () => {
+  const root = (uploadRef.value as any)?.$el as HTMLElement | undefined
+  const input = root?.querySelector('input[type="file"]') as HTMLInputElement | null | undefined
+  input?.click()
+}
+
+const handleZoneImportCommand = (command: 'choose' | 'toggleRecords') => {
+  if (command === 'toggleRecords') {
+    importWithRecords.value = !importWithRecords.value
+    return
+  }
+  if (!zoneImportGuideSeen.value) {
+    zoneImportGuideVisible.value = true
+    return
+  }
+  openZoneImportPicker()
 }
 
 const handleSortChange = ({ prop, order }: { prop: string; order: SortOrder }) => {
@@ -909,16 +979,40 @@ onBeforeUnmount(() => {
           <el-button :loading="batchLoading" :disabled="batchLoading || !selectedRows.length" @click="handleBatchAction('enable')">{{ t('zone.batchEnable') }}</el-button>
           <el-button :loading="batchLoading" :disabled="batchLoading || !selectedRows.length" @click="handleBatchAction('disable')">{{ t('zone.batchDisable') }}</el-button>
           <el-button type="danger" plain :loading="batchLoading" :disabled="batchLoading || !selectedRows.length" @click="handleBatchAction('delete')">{{ t('zone.batchDelete') }}</el-button>
-          <el-upload ref="uploadRef" :show-file-list="false" :auto-upload="false" :before-upload="parseImportedRows" accept=".xlsx,.xls,.json">
-            <el-button :loading="importLoading" :disabled="importLoading">
-              <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></template>
-              {{ t('zone.import') }}
-            </el-button>
-          </el-upload>
-          <el-dropdown @command="handleExportCommand">
+          <el-popover v-model:visible="zoneImportGuideVisible" trigger="manual" placement="bottom" :width="320">
+            <div class="mn-guide-popover">
+              <div class="mn-guide-title">{{ t('zone.importGuideTitle') }}</div>
+              <div class="mn-guide-text">{{ t('zone.importGuideDesc') }}</div>
+              <div class="mn-guide-actions">
+                <el-button size="small" type="primary" @click="dismissZoneImportGuide">{{ t('zone.guideGotIt') }}</el-button>
+              </div>
+            </div>
+            <template #reference>
+              <el-tooltip placement="top" :content="t('zone.importZonesHint')">
+                <span>
+                  <el-upload ref="uploadRef" class="mn-upload-hidden" :show-file-list="false" :auto-upload="false" @change="onUploadChange" accept=".xlsx,.xls,.json,.zone,.txt" />
+                  <el-dropdown @command="handleZoneImportCommand">
+                    <el-button :loading="importLoading" :disabled="importLoading" @click="handleZoneImportButtonClick">
+                      <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></template>
+                      <span class="mn-btn-main">{{ t('zone.importZones') }}</span>
+                      <span class="mn-btn-sub">{{ t('zone.importZonesSub') }}</span>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="choose">{{ t('zone.importChooseFile') }}</el-dropdown-item>
+                        <el-dropdown-item command="toggleRecords">{{ importWithRecords ? t('zone.importWithRecordsOn') : t('zone.importWithRecordsOff') }}</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </span>
+              </el-tooltip>
+            </template>
+          </el-popover>
+          <el-dropdown trigger="click" @command="handleExportCommand">
             <el-button :loading="exportLoading" :disabled="exportLoading">
               <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></template>
-              {{ t('zone.export') }}
+              <span class="mn-btn-main">{{ t('zone.exportZones') }}</span>
+              <span class="mn-btn-sub">{{ t('zone.exportZonesSub') }}</span>
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
@@ -1534,6 +1628,52 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.mn-upload-hidden {
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.mn-upload-hidden :deep(.el-upload) {
+  display: none;
+}
+
+.mn-btn-main {
+  display: block;
+  line-height: 1.1;
+  font-weight: 600;
+}
+
+.mn-btn-sub {
+  display: block;
+  line-height: 1.1;
+  font-size: 11px;
+  color: var(--app-text-secondary);
+}
+
+.mn-guide-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mn-guide-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--app-title);
+}
+
+.mn-guide-text {
+  font-size: 12px;
+  color: var(--app-text-regular);
+  line-height: 1.5;
+}
+
+.mn-guide-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .mn-input-icon {

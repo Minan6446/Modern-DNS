@@ -1,8 +1,6 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { jsPDF } from 'jspdf'
-import ExcelJS from 'exceljs'
 import { useMonitorStore } from '../../stores/monitor'
 import type { MonitorReportData } from '../../types/modules'
 import { loadTableState, saveTableState } from '../../utils/tableState'
@@ -464,6 +462,7 @@ export const useReport = () => {
   const exportExcelWithCharts = async (
     chartPngs: Partial<Record<ReportChartType, string>>,
   ): Promise<void> => {
+    const ExcelJS = (await import('exceljs')).default
     const workbook = new ExcelJS.Workbook()
     workbook.creator = 'Modern DNS'
     workbook.created = new Date()
@@ -556,6 +555,7 @@ export const useReport = () => {
   const exportPdfWithCharts = async (
     chartPngs: Partial<Record<ReportChartType, string>>,
   ): Promise<void> => {
+    const { jsPDF } = await import('jspdf')
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape' })
     const pageWidth = pdf.internal.pageSize.getWidth()
     const pageHeight = pdf.internal.pageSize.getHeight()

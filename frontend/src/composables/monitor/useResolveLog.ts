@@ -1,6 +1,5 @@
 import { computed, onScopeDispose, reactive, ref, watch } from 'vue'
 import { ElMessage, ElLoading } from 'element-plus'
-import * as XLSX from 'xlsx'
 import { useI18n } from 'vue-i18n'
 import { getResolveLogsApi } from '../../api/monitor'
 import type { MonitorResolveLogRow } from '../../types/modules'
@@ -131,6 +130,7 @@ const exportRows = (
       return
     }
 
+    const XLSX = await import('xlsx')
     const worksheet = XLSX.utils.json_to_sheet(rows)
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Export')

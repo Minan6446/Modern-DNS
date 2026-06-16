@@ -1,6 +1,5 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElLoading } from 'element-plus'
-import * as XLSX from 'xlsx'
 import { useI18n } from 'vue-i18n'
 import { getLogsApi } from '../../api/setting'
 import type { SettingLogItem } from '../../types/modules'
@@ -165,6 +164,7 @@ export const useOperationLog = () => {
       // file is what the operator sees. No round-trip needed.
 
       if (exportFormat.value === 'Excel') {
+        const XLSX = await import('xlsx')
         const worksheet = XLSX.utils.json_to_sheet(rows)
         const workbook = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(workbook, worksheet, 'logs')

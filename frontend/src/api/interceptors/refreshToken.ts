@@ -45,9 +45,12 @@ const rejectPendingRequests = (error: unknown): void => {
   pendingRequests.splice(0).forEach((request) => request.onError(error))
 }
 
+const REFRESH_TOKEN_KEY = 'modern-dns-refresh-token'
+
 const clearAuthState = (): void => {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
 }
 
 const redirectToLogin = async (): Promise<void> => {

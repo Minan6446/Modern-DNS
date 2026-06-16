@@ -141,7 +141,47 @@ const historyDrawerVisible = ref(false)
 
 /* ── import dialog (conflict detection) ── */
 const importDialogVisible = ref(false)
+const recordImportGuideVisible = ref(false)
+const recordImportGuideStorageKey = 'modern-dns:guide:record-import'
+const recordImportGuideSeen = ref(false)
+try {
+  recordImportGuideSeen.value = globalThis.localStorage?.getItem(recordImportGuideStorageKey) === '1'
+} catch {
+  recordImportGuideSeen.value = false
+}
+
+const dismissRecordImportGuide = () => {
+  recordImportGuideVisible.value = false
+  recordImportGuideSeen.value = true
+  try {
+    globalThis.localStorage?.setItem(recordImportGuideStorageKey, '1')
+  } catch {
+    // ignore localStorage failures
+  }
+}
+
+const handleRecordImportTriggerClick = (event: MouseEvent) => {
+  if (recordImportGuideSeen.value) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  recordImportGuideVisible.value = true
+}
+
 const handleImportClick = () => { importDialogVisible.value = true }
+const handleRecordImportCommand = (command: 'template' | 'import') => {
+  if (command === 'template') {
+    downloadRecordTemplateApi()
+    return
+  }
+  handleImportClick()
+}
+const handleRecordExportCommand = (command: 'csv') => {
+  if (command === 'csv') {
+    exportRecordsCsv(filteredRecords.value)
+  }
+}
 const handleImportConfirm = async (rows: ImportRow[], conflicts: ConflictItem[]) => {
   const toSave = [
     ...rows.filter((r) => !conflicts.some((c) => c.incoming === r)),
@@ -481,18 +521,40 @@ onBeforeUnmount(() => {
                 <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></template>
                 {{ t('record.batchEdit') }}
               </el-button>
-              <el-button @click="downloadRecordTemplateApi">
-                <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg></template>
-                {{ t('record.importTemplate') }}
-              </el-button>
-              <el-button @click="handleImportClick">
-                <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></template>
-                {{ t('record.importCsv') }}
-              </el-button>
-              <el-button @click="exportRecordsCsv(filteredRecords)">
-                <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></template>
-                {{ t('record.exportCsv') }}
-              </el-button>
+              <el-popover v-model:visible="recordImportGuideVisible" trigger="manual" placement="bottom" :width="320">
+                <div class="mn-guide-popover">
+                  <div class="mn-guide-title">{{ t('record.importGuideTitle') }}</div>
+                  <div class="mn-guide-text">{{ t('record.importGuideDesc') }}</div>
+                  <div class="mn-guide-actions">
+                    <el-button size="small" type="primary" @click="dismissRecordImportGuide">{{ t('record.guideGotIt') }}</el-button>
+                  </div>
+                </div>
+                <template #reference>
+                  <el-dropdown @command="handleRecordImportCommand">
+                    <el-button @click="handleRecordImportTriggerClick">
+                      <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></template>
+                      {{ t('zone.importRecords') }}
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="template">{{ t('record.importTemplate') }}</el-dropdown-item>
+                        <el-dropdown-item command="import">{{ t('record.importRecordsCsvZone') }}</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </template>
+              </el-popover>
+              <el-dropdown @command="handleRecordExportCommand">
+                <el-button>
+                  <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></template>
+                  {{ t('zone.exportRecords') }}
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="csv">{{ t('record.exportCsv') }}</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
               <el-button @click="historyDrawerVisible = true" :title="t('record.historyTitle')">
                 <template #icon><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></template>
               </el-button>
@@ -1013,6 +1075,29 @@ onBeforeUnmount(() => {
 .mn-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mn-record-count { font-size: 12px; color: var(--app-text-regular); }
 .mn-record-count strong { color: var(--app-title); font-weight: 600; }
+
+.mn-guide-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mn-guide-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--app-title);
+}
+
+.mn-guide-text {
+  font-size: 12px;
+  color: var(--app-text-regular);
+  line-height: 1.5;
+}
+
+.mn-guide-actions {
+  display: flex;
+  justify-content: flex-end;
+}
 
 /* ═══════════════ Table ═══════════════ */
 .mn-table :deep(.el-table__header th .cell) {
