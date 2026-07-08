@@ -87,12 +87,12 @@ const copyText = async (text: string, success: string): Promise<void> => {
   }
 }
 
-const exportRows = (
+const exportRows = async (
   rows: Array<Record<string, unknown>>,
   baseName: string,
   format: 'excel' | 'csv' | 'json',
   t: (key: string, params?: Record<string, unknown>) => string,
-): void => {
+): Promise<void> => {
   if (!rows.length) {
     ElMessage.warning(t('monitor.noExportData'))
     return
